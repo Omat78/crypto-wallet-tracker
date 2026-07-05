@@ -12,13 +12,6 @@ large transfers) are gated behind a paid tier.
 - **Static dashboard** (`static/index.html`, vanilla HTML/CSS/JS, no build step) served
   directly by Axum via `tower_http::services::ServeDir` — one process, one deploy.
 
-## Dashboard
-Visiting the server's root URL (e.g. `http://localhost:8080`) loads a single-page
-dashboard: paste a wallet address, see holdings/transactions/P&L, and (once
-connected with a paid key) manage real-time alerts. It talks to the same
-`/api/*` routes documented below and stores the API key in the browser's
-`localStorage`. No separate frontend host or build pipeline needed — it's
-just a static file the Rust server serves.
 
 ## Local setup
 ```bash
@@ -26,7 +19,7 @@ cp .env.example .env
 # add your free Etherscan API key: https://etherscan.io/apis
 cargo run
 ```
-Server starts on `http://localhost:8080`.
+
 
 ## API
 
