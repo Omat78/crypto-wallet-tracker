@@ -1,7 +1,7 @@
 # Crypto Wallet Tracker (Rust / Axum)
 
 Wallet & portfolio tracker: give it an address, get holdings, transaction
-history, and P&L across Ethereum and Solana. Real-time alerts (price moves,
+history, and P&L across Ethereum and Solana. Real time alerts (price moves,
 large transfers) are gated behind a paid tier.
 
 ## Stack
@@ -45,7 +45,7 @@ New users are free-tier by default.
 dashboard uses this to decide whether to show the alerts form or the upgrade
 notice.
 
-`POST /api/recover { email }` — issues a brand-new API key for that email
+`POST /api/recover { email }` issues a brand-new API key for that email
 and deactivates the old one, emailing the new key via Resend (or logging it
 server-side if `RESEND_API_KEY` isn't set — see "Email recovery" below).
 Always returns the same generic message whether or not the email has an
@@ -124,23 +124,6 @@ emailed, so you can copy it from there. Don't rely on that fallback once
 this is public, since anyone with log access could read it.
 
 
-- **Stripe webhooks are signature-verified** (`src/security.rs`) against the raw
-  request body using HMAC-SHA256, with a 5-minute timestamp tolerance to
-  block replay. Requests without a valid `Stripe-Signature` are rejected
-  with 400 before any database write happens.
-- **API keys are hashed** (SHA-256) before being stored — the raw key is
-  shown once at signup and never persisted. Lookups hash the incoming
-  `x-api-key` header and match against the stored hash.
-- **Rate limiting** is a self-contained fixed-window limiter (60 requests/IP/
-  minute by default — see `src/rate_limit.rs`), applied to all `/api/*`
-  routes. It reads `X-Forwarded-For` first so it works correctly behind
-  Render's proxy; it falls back to the raw socket address for local/direct
-  connections.
-- **CORS is restricted** via `ALLOWED_ORIGINS` (comma-separated list in
-  `.env`). If left unset, it falls back to wide-open CORS and logs a warning
-  on startup — set this before pointing a real frontend domain at a public
-  deployment.
-
 ## Known limitations (documented, not hidden)
 - **Token balances (ETH chain)** are approximated by netting ERC-20 transfer
   events from Etherscan, not a live per-token `balanceOf` call. Fine for a
@@ -153,7 +136,7 @@ this is public, since anyone with log access could read it.
   per signature, capped at the most recent `AMOUNT_RESOLUTION_LIMIT` (20, in
   `src/services/solana.rs`) to avoid hammering the free public RPC endpoint.
   Wallets with more than 20 transactions will show "unknown"/0 for older
-  ones, and Solana P&L only reflects those 20 — increase the constant (and
+  ones, and Solana P&L only reflects those 20, increase the constant (and
   consider a paid RPC provider like Helius/QuickNode) if you need more.
 - **Solana SPL token holdings** only recognize a small hardcoded set of mints
   (USDC, USDT, mSOL — see `solana::known_spl_token`). Unrecognized tokens
@@ -161,34 +144,21 @@ this is public, since anyone with log access could read it.
   token list API for broader coverage.
 - **Large-transfer alerts** check only the most recent transaction per poll;
   track last-seen tx hash per alert to avoid duplicate fires in production.
-- No persistent database migrations tool — schema changes (like the
+ No persistent database migrations tool schema changes (like the
   `api_key_hash` column) are applied via `CREATE TABLE IF NOT EXISTS` in
   `src/db.rs`, so an existing `data.db` from an older version of this app
   won't automatically get new columns. Delete `data.db` (or add an `ALTER
   TABLE`) if you're upgrading a running deployment.
-- Rate limiting is in-memory per instance — if you scale to multiple server
-  instances, move it to something shared (Redis) or a proxy-level limiter.
+Rate limiting is in memory per instance, if you scale to multiple server
+  instances, move it to something shared (Redis) or a proxy level limiter.
 - **Key recovery has no proof of ownership beyond "knows the email"** — same
   trust model as signup itself (which also never verifies email ownership).
   Good enough for an MVP; add an email confirmation link/OTP step before
   this is handling anything sensitive.
 
-## Deploying to Render
-This repo includes a `Dockerfile` and `render.yaml` blueprint:
-1. Push to GitHub.
-2. In Render: New → Blueprint → point at the repo (it reads `render.yaml`).
-3. Set the secret env vars it prompts for (`sync: false` in the blueprint):
-   `ETHERSCAN_API_KEY`, `ALLOWED_ORIGINS`, `APP_BASE_URL`, `STRIPE_SECRET_KEY`,
-   `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY`, `EMAIL_FROM`.
-4. The attached 1GB disk persists `data.db` (SQLite) across deploys.
-5. Once deployed, update your Stripe webhook endpoint URL and `APP_BASE_URL`
-   to match the real `https://yourapp.onrender.com` address Render gives you.
-
-For higher traffic, swap SQLite for managed Postgres (Render Postgres) —
-only `src/db.rs` needs to change (swap `sqlx::sqlite` for `sqlx::postgres`).
 
 ## Monetization notes
-- Free tier: on-demand holdings/transactions/P&L lookups.
-- Paid tier: real-time webhook alerts (price moves + large transfers),
+Free tier: on demand holdings/transactions/P&L lookups.
+Paid tier: real-time webhook alerts (price moves + large transfers),
   purchased through an actual Stripe Checkout flow (see "Stripe setup" above)
-  — this is wired end-to-end now, not a stub.
+  
