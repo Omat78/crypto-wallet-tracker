@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ledger — wallet tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0E1420;
+    --panel:#141B29;
+    --panel-2:#1A2333;
+    --line:#2A3342;
+    --text:#EDEFF2;
+    --muted:#8A93A6;
+    --gain:#3ECF8E;
+    --loss:#E2725B;
+    --amber:#F2B84B;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--ink);
+    color:var(--text);
+    font-family:'Inter',system-ui,sans-serif;
+    min-height:100vh;
+    line-height:1.5;
+  }
+  .mono{font-family:'IBM Plex Mono',monospace; font-variant-numeric: tabular-nums;}
+  a{color:inherit;}
+
+  /* ---------- top bar ---------- */
+  header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:18px 28px; border-bottom:1px solid var(--line);
+    position:sticky; top:0; background:rgba(14,20,32,0.92); backdrop-filter:blur(6px);
+    z-index:10;
+  }
+  .brand{display:flex; align-items:center; gap:10px; font-family:'IBM Plex Mono',monospace; font-weight:600; letter-spacing:0.02em;}
+  .brand .dot{width:8px;height:8px;border-radius:50%;background:var(--gain); box-shadow:0 0 8px var(--gain);}
+  .account{display:flex; align-items:center; gap:10px; font-size:13px; color:var(--muted);}
+  .pill{
+    padding:5px 12px; border-radius:999px; font-size:12px; font-family:'IBM Plex Mono',monospace;
+    border:1px solid var(--line); background:var(--panel);
+  }
+  .pill.paid{color:var(--amber); border-color:rgba(242,184,75,0.4);}
+  .pill.free{color:var(--muted);}
+  button{
+    font-family:'Inter',sans-serif; font-size:13px; font-weight:500; cursor:pointer;
+    border-radius:8px; border:1px solid var(--line); background:var(--panel-2); color:var(--text);
+    padding:8px 14px; transition:border-color .15s ease, transform .1s ease;
+  }
+  button:hover{border-color:#3B4658;}
+  button:active{transform:translateY(1px);}
+  button.primary{background:var(--gain); color:#0E1420; border-color:var(--gain); font-weight:600;}
+  button.primary:hover{filter:brightness(1.08);}
+  button.ghost{background:transparent;}
+  button:disabled{opacity:.45; cursor:not-allowed;}
+  input, select{
+    font-family:'IBM Plex Mono',monospace; font-size:14px;
+    background:var(--panel-2); border:1px solid var(--line); color:var(--text);
+    border-radius:8px; padding:10px 12px; outline:none;
+  }
+  input:focus, select:focus, button:focus-visible{outline:2px solid var(--amber); outline-offset:1px;}
+  input::placeholder{color:#57607a;}
+
+  main{max-width:920px; margin:0 auto; padding:0 24px 80px;}
+
+  /* ---------- hero / prompt ---------- */
+  .hero{padding:56px 0 28px;}
+  .hero h1{
+    font-family:'IBM Plex Mono',monospace; font-size:28px; margin:0 0 6px;
+    letter-spacing:-0.01em;
+  }
+  .hero p{color:var(--muted); margin:0 0 28px; font-size:15px;}
+  .prompt{
+    display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+    background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+    padding:14px 16px; font-family:'IBM Plex Mono',monospace;
+  }
+  .prompt .caret{color:var(--gain); font-weight:700;}
+  .chain-toggle{display:flex; gap:4px; background:var(--panel-2); border-radius:8px; padding:3px; border:1px solid var(--line);}
+  .chain-toggle button{border:none; background:transparent; padding:7px 12px; border-radius:6px; font-family:'IBM Plex Mono',monospace; font-size:13px;}
+  .chain-toggle button.active{background:var(--ink); color:var(--gain);}
+  .prompt input{flex:1; min-width:220px; border:none; background:transparent; font-size:15px; padding:8px 4px;}
+  .prompt input:focus{outline:none;}
+
+  .status-line{margin-top:10px; font-size:13px; color:var(--muted); font-family:'IBM Plex Mono',monospace; min-height:18px;}
+  .status-line.err{color:var(--loss);}
+
+  /* ---------- panels ---------- */
+  .grid{display:grid; grid-template-columns:1.1fr 1fr; gap:20px; margin-top:8px;}
+  @media (max-width:760px){ .grid{grid-template-columns:1fr;} }
+  .panel{
+    background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+    padding:20px; margin-top:20px;
+  }
+  .panel h2{
+    font-size:12px; text-transform:uppercase; letter-spacing:0.09em; color:var(--muted);
+    margin:0 0 16px; font-weight:600;
+  }
+  .empty{color:var(--muted); font-size:13px; padding:12px 0;}
+
+  .holding-row{display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--line);}
+  .holding-row:last-child{border-bottom:none;}
+  .holding-sym{font-weight:600; font-size:14px;}
+  .holding-name{color:var(--muted); font-size:12px;}
+  .holding-val{text-align:right;}
+  .holding-usd{font-family:'IBM Plex Mono',monospace; font-weight:600;}
+  .holding-amt{font-family:'IBM Plex Mono',monospace; color:var(--muted); font-size:12px;}
+  .total-row{display:flex; justify-content:space-between; padding-top:14px; margin-top:4px; border-top:1px solid var(--line); font-weight:600;}
+  .total-row .val{font-family:'IBM Plex Mono',monospace; font-size:18px;}
+
+  .tx-row{display:flex; align-items:center; gap:12px; padding:9px 0; border-bottom:1px solid var(--line); font-size:13px;}
+  .tx-row:last-child{border-bottom:none;}
+  .tx-dir{width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; font-family:'IBM Plex Mono',monospace; flex-shrink:0;}
+  .tx-dir.in{background:rgba(62,207,142,0.15); color:var(--gain);}
+  .tx-dir.out{background:rgba(226,114,91,0.15); color:var(--loss);}
+  .tx-dir.other{background:rgba(138,147,166,0.15); color:var(--muted);}
+  .tx-main{flex:1; min-width:0;}
+  .tx-hash{font-family:'IBM Plex Mono',monospace; color:var(--muted); font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .tx-amt{font-family:'IBM Plex Mono',monospace; text-align:right; flex-shrink:0;}
+
+  .pnl-card{display:flex; flex-direction:column; gap:4px;}
+  .pnl-headline{font-family:'IBM Plex Mono',monospace; font-size:34px; font-weight:700;}
+  .pnl-headline.gain{color:var(--gain);} .pnl-headline.loss{color:var(--loss);}
+  .pnl-note{color:var(--muted); font-size:12px; margin-top:8px; line-height:1.5;}
+  .pnl-stats{display:flex; gap:24px; margin-top:14px;}
+  .pnl-stat .label{color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:0.06em;}
+  .pnl-stat .value{font-family:'IBM Plex Mono',monospace; font-size:15px; margin-top:2px;}
+
+  /* ---------- alerts ---------- */
+  .alert-form{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px;}
+  .alert-form select, .alert-form input{flex:1; min-width:110px;}
+  .alert-row{display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--line); font-size:13px;}
+  .alert-row:last-child{border-bottom:none;}
+  .alert-meta{color:var(--muted); font-size:12px; margin-top:2px;}
+  .lock{
+    display:flex; align-items:center; gap:10px; padding:16px; border:1px dashed var(--line);
+    border-radius:8px; color:var(--muted); font-size:13px;
+  }
+  .lock .amber{color:var(--amber);}
+
+  /* ---------- modal ---------- */
+  .modal-backdrop{position:fixed; inset:0; background:rgba(6,9,15,0.7); display:none; align-items:center; justify-content:center; z-index:50;}
+  .modal-backdrop.open{display:flex;}
+  .modal{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:24px; width:340px; max-width:90vw;}
+  .modal h3{margin:0 0 6px; font-size:16px;}
+  .modal p{color:var(--muted); font-size:13px; margin:0 0 16px;}
+  .modal input{width:100%; margin-bottom:10px;}
+  .modal .row{display:flex; gap:8px; justify-content:flex-end; margin-top:14px;}
+  .modal .key-box{
+    font-family:'IBM Plex Mono',monospace; background:var(--panel-2); border:1px solid var(--line);
+    border-radius:6px; padding:10px; font-size:12px; word-break:break-all; margin-bottom:10px;
+  }
+
+  footer{text-align:center; color:var(--muted); font-size:12px; padding:30px 0; border-top:1px solid var(--line);}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand"><span class="dot"></span> LEDGER</div>
+  <div class="account">
+    <span id="account-pill" class="pill free">not connected</span>
+    <button id="connect-btn" class="ghost">Connect</button>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <h1>Track any wallet</h1>
+    <p>Paste an address to see holdings, transaction history, and P&amp;L. Connect an API key to set up real-time alerts.</p>
+    <div class="prompt">
+      <span class="caret">&gt;</span>
+      <div class="chain-toggle" id="chain-toggle">
+        <button data-chain="ethereum" class="active">ethereum</button>
+        <button data-chain="solana">solana</button>
+      </div>
+      <input id="address-input" type="text" placeholder="wallet address…" autocomplete="off" spellcheck="false" />
+      <button class="primary" id="track-btn">Track</button>
+    </div>
+    <div class="status-line" id="status-line"></div>
+  </section>
+
+  <div class="grid">
+    <div>
+      <div class="panel">
+        <h2>Holdings</h2>
+        <div id="holdings-body"><div class="empty">Track a wallet to see balances.</div></div>
+      </div>
+      <div class="panel">
+        <h2>P&amp;L</h2>
+        <div id="pnl-body"><div class="empty">Track a wallet to see estimated P&amp;L.</div></div>
+      </div>
+    </div>
+    <div>
+      <div class="panel">
+        <h2>Transactions</h2>
+        <div id="tx-body"><div class="empty">Track a wallet to see recent activity.</div></div>
+      </div>
+      <div class="panel">
+        <h2>Real-time alerts</h2>
+        <div id="alerts-body"><div class="empty">Connect an API key to manage alerts.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>Holdings for ERC-20 tokens and P&amp;L are estimates — see the README for how each is calculated.</footer>
+</main>
+
+<div class="modal-backdrop" id="modal-backdrop">
+  <div class="modal">
+    <div id="modal-signup">
+      <h3>Get an API key</h3>
+      <p>Free for wallet lookups. Upgrade later to unlock real-time alerts.</p>
+      <input id="signup-email" type="email" placeholder="you@example.com" />
+      <div class="row">
+        <button class="ghost" id="show-paste">I already have a key</button>
+        <button class="primary" id="signup-submit">Get key</button>
+      </div>
+    </div>
+    <div id="modal-paste" style="display:none">
+      <h3>Connect with API key</h3>
+      <p>Paste the key you saved from signup.</p>
+      <input id="paste-key" type="text" placeholder="cwt_…" />
+      <div class="row">
+        <button class="ghost" id="show-signup">New here?</button>
+        <button class="primary" id="paste-submit">Connect</button>
+      </div>
+      <div class="row" style="justify-content:flex-start; margin-top:2px;">
+        <button class="ghost" id="show-recover" style="font-size:12px; padding:4px 0; border:none; background:none; color:var(--muted); text-decoration:underline;">Forgot your key?</button>
+      </div>
+    </div>
+    <div id="modal-recover" style="display:none">
+      <h3>Recover your key</h3>
+      <p>We'll email a new key to your address (via Resend). Your old key stops working once the new one is sent.</p>
+      <input id="recover-email" type="email" placeholder="you@example.com" />
+      <div class="row">
+        <button class="ghost" id="show-paste-from-recover">Back</button>
+        <button class="primary" id="recover-submit">Send new key</button>
+      </div>
+    </div>
+    <div id="modal-result" style="display:none">
+      <h3>Save this key</h3>
+      <p>It won't be shown again. It's also saved in this browser.</p>
+      <div class="key-box" id="key-box"></div>
+      <div class="row"><button class="primary" id="modal-done">Done</button></div>
+    </div>
+    <div class="row" style="margin-top:2px;"><button class="ghost" id="modal-close" style="font-size:12px;">Close</button></div>
+  </div>
+</div>
+
+<script>
+const state = {
+  apiKey: localStorage.getItem('cwt_api_key') || null,
+  isPaid: localStorage.getItem('cwt_is_paid') === 'true',
+  chain: 'ethereum',
+};
+
+const $ = (id) => document.getElementById(id);
+
+function fmtUsd(n){
+  if (n === null || n === undefined || Number.isNaN(n)) return '—';
+  return n.toLocaleString('en-US', { style:'currency', currency:'USD', maximumFractionDigits: 2 });
+}
+function fmtAmt(n){
+  if (n === null || n === undefined) return '—';
+  return n.toLocaleString('en-US', { maximumFractionDigits: 6 });
+}
+function shortHash(h){
+  if (!h) return '';
+  return h.length > 14 ? h.slice(0,8) + '…' + h.slice(-6) : h;
+}
+function setStatus(msg, isErr){
+  const el = $('status-line');
+  el.textContent = msg || '';
+  el.classList.toggle('err', !!isErr);
+}
+
+function refreshAccountPill(){
+  const pill = $('account-pill');
+  if (!state.apiKey){
+    pill.textContent = 'not connected';
+    pill.className = 'pill free';
+    $('connect-btn').textContent = 'Connect';
+  } else {
+    pill.textContent = state.isPaid ? 'paid' : 'free tier';
+    pill.className = 'pill ' + (state.isPaid ? 'paid' : 'free');
+    $('connect-btn').textContent = 'Switch key';
+  }
+}
+
+async function api(path, opts = {}){
+  const headers = opts.headers || {};
+  if (state.apiKey) headers['x-api-key'] = state.apiKey;
+  if (opts.body) headers['Content-Type'] = 'application/json';
+  const res = await fetch(path, { ...opts, headers });
+  let data = null;
+  try { data = await res.json(); } catch (e) { /* no body */ }
+  if (!res.ok){
+    const message = (data && (data.message || data)) || res.statusText;
+    const err = new Error(typeof message === 'string' ? message : JSON.stringify(message));
+    err.status = res.status;
+    throw err;
+  }
+  return data;
+}
+
+/* ---------- chain toggle ---------- */
+$('chain-toggle').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-chain]');
+  if (!btn) return;
+  state.chain = btn.dataset.chain;
+  document.querySelectorAll('#chain-toggle button').forEach(b => b.classList.toggle('active', b === btn));
+});
+
+/* ---------- track wallet ---------- */
+$('track-btn').addEventListener('click', trackWallet);
+$('address-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') trackWallet(); });
+
+async function trackWallet(){
+  const address = $('address-input').value.trim();
+  if (!address){ setStatus('Enter a wallet address first.', true); return; }
+  if (!state.apiKey){ setStatus('Connect an API key to look up wallets.', true); openModal('signup'); return; }
+
+  setStatus('Fetching holdings, transactions, and P&L…');
+  $('holdings-body').innerHTML = '<div class="empty">Loading…</div>';
+  $('tx-body').innerHTML = '<div class="empty">Loading…</div>';
+  $('pnl-body').innerHTML = '<div class="empty">Loading…</div>';
+
+  const base = `/api/wallet/${state.chain}/${encodeURIComponent(address)}`;
+  const results = await Promise.allSettled([
+    api(`${base}/holdings`),
+    api(`${base}/transactions`),
+    api(`${base}/pnl`),
+  ]);
+
+  const [holdings, txs, pnl] = results;
+  if (holdings.status === 'fulfilled') renderHoldings(holdings.value);
+  else renderError('holdings-body', holdings.reason);
+
+  if (txs.status === 'fulfilled') renderTxs(txs.value);
+  else renderError('tx-body', txs.reason);
+
+  if (pnl.status === 'fulfilled') renderPnl(pnl.value);
+  else renderError('pnl-body', pnl.reason);
+
+  const anyFailed = results.some(r => r.status === 'rejected');
+  setStatus(anyFailed ? 'Some data couldn\'t be loaded — see details above.' : 'Up to date.', anyFailed);
+
+  renderAlertFormDefaults(address);
+}
+
+function renderError(targetId, err){
+  $(targetId).innerHTML = `<div class="empty">Couldn't load this: ${escapeHtml(err.message || 'unknown error')}.</div>`;
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function renderHoldings(data){
+  const tokens = (data.tokens || []).slice().sort((a,b) => b.usd_value - a.usd_value);
+  if (!tokens.length){
+    $('holdings-body').innerHTML = '<div class="empty">No balances found for this address.</div>';
+    return;
+  }
+  const rows = tokens.map(t => `
+    <div class="holding-row">
+      <div>
+        <div class="holding-sym">${escapeHtml(t.symbol)}</div>
+        <div class="holding-name">${escapeHtml(t.name)}</div>
+      </div>
+      <div class="holding-val">
+        <div class="holding-usd">${fmtUsd(t.usd_value)}</div>
+        <div class="holding-amt">${fmtAmt(t.balance)} ${escapeHtml(t.symbol)}</div>
+      </div>
+    </div>`).join('');
+  $('holdings-body').innerHTML = rows + `
+    <div class="total-row"><span>Total</span><span class="val">${fmtUsd(data.total_usd_value)}</span></div>`;
+}
+
+function renderTxs(txs){
+  if (!txs.length){
+    $('tx-body').innerHTML = '<div class="empty">No recent transactions found.</div>';
+    return;
+  }
+  const rows = txs.slice(0, 25).map(t => {
+    const dirClass = t.direction === 'in' ? 'in' : (t.direction === 'out' ? 'out' : 'other');
+    const dirSymbol = t.direction === 'in' ? '↓' : (t.direction === 'out' ? '↑' : '·');
+    const when = t.timestamp ? new Date(t.timestamp).toLocaleDateString() : '';
+    return `
+      <div class="tx-row">
+        <div class="tx-dir ${dirClass}">${dirSymbol}</div>
+        <div class="tx-main">
+          <div class="tx-hash">${escapeHtml(shortHash(t.hash))}</div>
+          <div class="holding-name">${escapeHtml(when)}</div>
+        </div>
+        <div class="tx-amt">${fmtAmt(t.amount)} ${escapeHtml(t.asset || '')}</div>
+      </div>`;
+  }).join('');
+  $('tx-body').innerHTML = rows;
+}
+
+function renderPnl(pnl){
+  const isGain = pnl.unrealized_pnl_usd >= 0;
+  $('pnl-body').innerHTML = `
+    <div class="pnl-card">
+      <div class="pnl-headline ${isGain ? 'gain' : 'loss'}">${isGain ? '+' : ''}${fmtUsd(pnl.unrealized_pnl_usd)}</div>
+      <div class="pnl-stats">
+        <div class="pnl-stat"><div class="label">Inflow</div><div class="value">${fmtUsd(pnl.total_inflow_usd)}</div></div>
+        <div class="pnl-stat"><div class="label">Outflow</div><div class="value">${fmtUsd(pnl.total_outflow_usd)}</div></div>
+      </div>
+      <div class="pnl-note">${escapeHtml(pnl.note || '')}</div>
+    </div>`;
+}
+
+/* ---------- alerts ---------- */
+function renderAlertFormDefaults(address){
+  if (!state.isPaid) return;
+  const form = document.getElementById('alert-address');
+  const chainSel = document.getElementById('alert-chain');
+  if (form) form.value = address;
+  if (chainSel) chainSel.value = state.chain;
+}
+
+async function loadAlerts(){
+  const target = $('alerts-body');
+  if (!state.apiKey){
+    target.innerHTML = '<div class="empty">Connect an API key to manage alerts.</div>';
+    return;
+  }
+  if (!state.isPaid){
+    target.innerHTML = `
+      <div class="lock">
+        <span class="amber">🔒</span> Real-time alerts (price moves &amp; large transfers) are a paid feature.
+      </div>
+      <div class="row" style="margin-top:12px; justify-content:flex-start;">
+        <button class="primary" id="upgrade-btn">Upgrade</button>
+      </div>`;
+    document.getElementById('upgrade-btn').addEventListener('click', startCheckout);
+    return;
+  }
+  target.innerHTML = renderAlertForm() + '<div class="empty">Loading alerts…</div>';
+  wireAlertForm();
+  try{
+    const alerts = await api('/api/alerts');
+    renderAlertList(alerts);
+  } catch(err){
+    document.getElementById('alert-list').innerHTML = `<div class="empty">Couldn't load alerts: ${escapeHtml(err.message)}.</div>`;
+  }
+}
+
+async function startCheckout(){
+  setStatus('Starting checkout…');
+  try{
+    const data = await api('/api/checkout', { method:'POST' });
+    window.location.href = data.checkout_url;
+  } catch(err){
+    setStatus(`Couldn't start checkout: ${err.message}`, true);
+  }
+}
+
+function renderAlertForm(){
+  return `
+    <div class="alert-form">
+      <select id="alert-chain">
+        <option value="ethereum">ethereum</option>
+        <option value="solana">solana</option>
+      </select>
+      <input id="alert-address" placeholder="wallet address" />
+      <select id="alert-type">
+        <option value="price_move">price move (%)</option>
+        <option value="large_transfer">large transfer (USD)</option>
+      </select>
+      <input id="alert-threshold" type="number" placeholder="threshold" />
+      <input id="alert-webhook" placeholder="webhook URL" />
+      <button class="primary" id="alert-submit">Add alert</button>
+    </div>
+    <div id="alert-list"></div>
+  `;
+}
+
+function wireAlertForm(){
+  document.getElementById('alert-submit').addEventListener('click', async () => {
+    const body = {
+      chain: document.getElementById('alert-chain').value,
+      address: document.getElementById('alert-address').value.trim(),
+      alert_type: document.getElementById('alert-type').value,
+      threshold: parseFloat(document.getElementById('alert-threshold').value),
+      webhook_url: document.getElementById('alert-webhook').value.trim(),
+    };
+    if (!body.address || !body.webhook_url || Number.isNaN(body.threshold)){
+      setStatus('Fill in address, threshold, and webhook URL to add an alert.', true);
+      return;
+    }
+    try{
+      await api('/api/alerts', { method:'POST', body: JSON.stringify(body) });
+      loadAlerts();
+    } catch(err){
+      setStatus(`Couldn't add alert: ${err.message}`, true);
+    }
+  });
+}
+
+function renderAlertList(alerts){
+  const list = document.getElementById('alert-list');
+  if (!alerts.length){ list.innerHTML = '<div class="empty">No alerts yet — add one above.</div>'; return; }
+  list.innerHTML = alerts.map(a => `
+    <div class="alert-row">
+      <div>
+        <div>${escapeHtml(a.alert_type.replace('_',' '))} — ${escapeHtml(a.chain)}</div>
+        <div class="alert-meta">${escapeHtml(shortHash(a.address))} · threshold ${a.threshold}</div>
+      </div>
+      <button class="ghost" data-id="${a.id}">Remove</button>
+    </div>`).join('');
+  list.querySelectorAll('button[data-id]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try{
+        await api(`/api/alerts/${btn.dataset.id}`, { method:'DELETE' });
+        loadAlerts();
+      } catch(err){ setStatus(`Couldn't remove alert: ${err.message}`, true); }
+    });
+  });
+}
+
+/* ---------- connect modal ---------- */
+function openModal(view){
+  $('modal-backdrop').classList.add('open');
+  $('modal-signup').style.display = view === 'signup' ? 'block' : 'none';
+  $('modal-paste').style.display = view === 'paste' ? 'block' : 'none';
+  $('modal-recover').style.display = view === 'recover' ? 'block' : 'none';
+  $('modal-result').style.display = view === 'result' ? 'block' : 'none';
+}
+function closeModal(){ $('modal-backdrop').classList.remove('open'); }
+
+$('connect-btn').addEventListener('click', () => openModal(state.apiKey ? 'paste' : 'signup'));
+$('modal-close').addEventListener('click', closeModal);
+$('modal-done').addEventListener('click', closeModal);
+$('show-paste').addEventListener('click', () => openModal('paste'));
+$('show-signup').addEventListener('click', () => openModal('signup'));
+$('show-recover').addEventListener('click', () => openModal('recover'));
+$('show-paste-from-recover').addEventListener('click', () => openModal('paste'));
+
+$('recover-submit').addEventListener('click', async () => {
+  const email = $('recover-email').value.trim();
+  if (!email){ return; }
+  try{
+    const data = await api('/api/recover', { method:'POST', body: JSON.stringify({ email }) });
+    setStatus(data.message || 'Check your email for a new key.');
+    closeModal();
+  } catch(err){
+    setStatus(`Couldn't process that: ${err.message}`, true);
+  }
+});
+
+$('signup-submit').addEventListener('click', async () => {
+  const email = $('signup-email').value.trim();
+  if (!email){ return; }
+  try{
+    const data = await api('/api/signup', { method:'POST', body: JSON.stringify({ email }) });
+    setApiKey(data.api_key, false);
+    $('key-box').textContent = data.api_key;
+    openModal('result');
+    checkPaidStatus();
+  } catch(err){
+    setStatus(`Signup failed: ${err.message}`, true);
+  }
+});
+
+$('paste-submit').addEventListener('click', () => {
+  const key = $('paste-key').value.trim();
+  if (!key) return;
+  // Paid status is unknown until first API call resolves it (see checkPaidStatus).
+  setApiKey(key, state.isPaid);
+  closeModal();
+  checkPaidStatus();
+});
+
+function setApiKey(key, isPaid){
+  state.apiKey = key;
+  state.isPaid = isPaid;
+  localStorage.setItem('cwt_api_key', key);
+  localStorage.setItem('cwt_is_paid', String(isPaid));
+  refreshAccountPill();
+  loadAlerts();
+}
+
+async function checkPaidStatus(){
+  try{
+    const me = await api('/api/me');
+    state.isPaid = !!me.is_paid;
+    localStorage.setItem('cwt_is_paid', String(state.isPaid));
+  } catch(err){
+    setStatus(`Couldn't verify account: ${err.message}`, true);
+  }
+  refreshAccountPill();
+  loadAlerts();
+}
+
+refreshAccountPill();
+if (state.apiKey) checkPaidStatus();
+
+/* ---------- handle return from Stripe Checkout ---------- */
+(function handleCheckoutReturn(){
+  const params = new URLSearchParams(window.location.search);
+  const checkoutResult = params.get('checkout');
+  if (!checkoutResult) return;
+
+  if (checkoutResult === 'success'){
+    setStatus('Payment received — verifying your account…');
+    if (state.apiKey) checkPaidStatus();
+  } else if (checkoutResult === 'cancelled'){
+    setStatus('Checkout was cancelled — you\'re still on the free tier.');
+  }
+  // Clean the URL so refreshing doesn't re-trigger this.
+  window.history.replaceState({}, document.title, window.location.pathname);
+})();
+</script>
+</body>
+</html>

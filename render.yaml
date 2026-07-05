@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: crypto-wallet-tracker
+    env: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: DATABASE_URL
+        value: sqlite:///data/data.db
+      - key: ETHERSCAN_API_KEY
+        sync: false
+      - key: COINGECKO_API_BASE
+        value: https://api.coingecko.com/api/v3
+      - key: SOLANA_RPC_URL
+        value: https://api.mainnet-beta.solana.com
+      - key: ALERT_POLL_SECONDS
+        value: 60
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: APP_BASE_URL
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_PRICE_ID
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+    disk:
+      name: data
+      mountPath: /data
+      sizeGB: 1
